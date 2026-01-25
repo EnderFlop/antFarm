@@ -38,6 +38,12 @@ class World {
                 }
             }
         }
+        // poke initial antholes into the earth for the ants
+        for (let x = 0; x < this.grid[this.groundHeight].length; x++) {
+            if (Math.random() < 0.05) { //5% chance for a hole.
+                this.set(x, this.groundHeight + 1, ENTITY_TYPES.AIR);
+            }
+        }
     }
     // Get entity at position
     get(x, y) {
@@ -68,7 +74,7 @@ class Ant {
     }
     move() {
         const possibleMoves = this.getValidMoves();
-        if (!possibleMoves) {
+        if (possibleMoves.length === 0) {
             return;
         }
         const move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
@@ -86,16 +92,71 @@ class Ant {
             [-1, 0], [0, 1],
             [1, 0], [0, -1],
         ];
+        // Check if ant can dig (surrounded by 1 AIR and 3 DIRT)
+        const airDirection = this.canDig();
         for (const [rowOffset, colOffset] of possibleLocations) {
-            const neighborEntity = this.world.get(this.x + rowOffset, this.y + colOffset);
-            if (neighborEntity == ENTITY_TYPES.AIR || neighborEntity == ENTITY_TYPES.DIRT) {
+            const targetX = this.x + rowOffset;
+            const targetY = this.y + colOffset;
+            const neighborEntity = this.world.get(targetX, targetY);
+            // Can always move into AIR (free movement in tunnels)
+            if (neighborEntity == ENTITY_TYPES.AIR) {
                 validMoves.push([rowOffset, colOffset]);
             }
-            else {
-                validMoves.push([0, 0]);
+            // Can only dig DIRT if tunneling conditions are met
+            else if (neighborEntity == ENTITY_TYPES.DIRT && airDirection) {
+                // Check if this is an allowed digging direction
+                if (this.isAllowedDigDirection([rowOffset, colOffset], airDirection)) {
+                    validMoves.push([rowOffset, colOffset]);
+                }
             }
         }
         return validMoves;
+    }
+    // Check if ant can dig (must be surrounded by exactly 1 AIR and 3 DIRT)
+    canDig() {
+        const adjacentOffsets = [
+            [-1, 0], [0, 1], [1, 0], [0, -1]
+        ];
+        let airCount = 0;
+        let dirtCount = 0;
+        let airDirection = null;
+        for (const [dx, dy] of adjacentOffsets) {
+            const entity = this.world.get(this.x + dx, this.y + dy);
+            if (entity == ENTITY_TYPES.AIR) {
+                airCount++;
+                airDirection = [dx, dy];
+            }
+            else if (entity == ENTITY_TYPES.DIRT) {
+                dirtCount++;
+            }
+        }
+        // Can dig if exactly 1 AIR and 3 DIRT neighbors
+        if (airCount === 1 && dirtCount === 3) {
+            return airDirection;
+        }
+        return null;
+    }
+    // Check if a direction is allowed for digging (90% straight, 10% corner)
+    isAllowedDigDirection(direction, airDirection) {
+        // Direction away from air (straight direction)
+        const straightDirection = [
+            -airDirection[0],
+            -airDirection[1]
+        ];
+        // Check if this is the straight direction
+        if (direction[0] === straightDirection[0] && direction[1] === straightDirection[1]) {
+            // 90% chance to allow straight digging
+            return Math.random() < 0.9;
+        }
+        // Check if this is a corner direction (perpendicular to straight)
+        // A direction is perpendicular if dot product is 0
+        const dotProduct = direction[0] * straightDirection[0] + direction[1] * straightDirection[1];
+        const isCorner = dotProduct === 0;
+        if (isCorner) {
+            // 10% chance to allow corner digging
+            return Math.random() < 0.1;
+        }
+        return false;
     }
 }
 // Renderer class - handles ASCII text rendering
