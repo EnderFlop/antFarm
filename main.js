@@ -38,12 +38,12 @@ class World {
                 }
             }
         }
-        // poke initial antholes into the earth for the ants
-        for (let x = 0; x < this.grid[this.groundHeight].length; x++) {
-            if (Math.random() < 0.05) { //5% chance for a hole.
-                this.set(x, this.groundHeight + 1, ENTITY_TYPES.AIR);
-            }
-        }
+        // // poke initial antholes into the earth for the ants
+        // for (let x = 0; x < this.grid[this.groundHeight].length; x++) {
+        //     if (Math.random() < 0.05) { //5% chance for a hole.
+        //         this.set(x, this.groundHeight + 1, ENTITY_TYPES.AIR);
+        //     }
+        // }
     }
     // Get entity at position
     get(x, y) {
@@ -66,97 +66,223 @@ class World {
     }
 }
 class Ant {
-    constructor(x, y, world) {
+    constructor(x, y, world, target = null) {
         this.x = x;
         this.y = y;
         this.world = world;
+        this.target = target;
+        this.state = 'going_to_target';
+        this.surfaceY = y; // Remember where the surface is
+        this.moveHistory = [];
         this.world.set(x, y, ENTITY_TYPES.ANT);
     }
     move() {
-        const possibleMoves = this.getValidMoves();
-        if (possibleMoves.length === 0) {
+        if (!this.target) {
+            console.log("notarget");
             return;
         }
-        const move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-        const [moveRowOffset, moveColOffset] = move;
-        this.world.set(this.x, this.y, ENTITY_TYPES.AIR);
-        this.x += moveRowOffset;
-        this.y += moveColOffset;
-        this.world.set(this.x, this.y, ENTITY_TYPES.ANT);
-        console.log(this.x, this.y);
-        return;
+        console.log(this.state);
+        console.log(this.x, this.y, this.target);
+        switch (this.state) {
+            case 'going_to_target':
+                this.moveTowardsTarget();
+                break;
+            case 'digging':
+                this.digAtTarget();
+                break;
+            case 'returning_to_surface':
+                this.moveToSurface();
+                break;
+        }
     }
+    // Find closest AIR tile to target and move towards it
+    moveTowardsTarget() {
+        const closestAir = this.findClosestAirToTarget();
+        if (!closestAir) {
+            // No path to target, try to dig
+            this.state = 'digging';
+            return;
+        }
+        // Move one step towards the closest AIR tile
+        const [targetX, targetY] = closestAir;
+        // Move in the direction that gets us closer
+        const possibleMoves = this.getValidMoves();
+        let bestMove = null;
+        let bestDistance = Infinity;
+        for (const [moveX, moveY] of possibleMoves) {
+            const newX = this.x + moveX;
+            const newY = this.y + moveY;
+            const distance = Math.abs(newX - targetX) + Math.abs(newY - targetY);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestMove = [moveX, moveY];
+            }
+        }
+        if (bestMove) {
+            this.executeMove(bestMove, true); // Track this move
+            // Check if we're at the target area (within 1 tile)
+            const distanceToTarget = Math.abs(this.x - targetX) + Math.abs(this.y - targetY);
+            if (distanceToTarget <= 1) {
+                this.state = 'digging';
+            }
+        }
+    }
+    // Dig at target location - dig the DIRT closest to target
+    digAtTarget() {
+        if (!this.target)
+            return;
+        const [targetX, targetY] = this.target;
+        // Check if we've reached the target
+        if (this.x === targetX && this.y === targetY) {
+            // We're at the target! Return to surface
+            this.state = 'returning_to_surface';
+            return;
+        }
+        // Find all adjacent DIRT blocks and pick the one closest to target
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        let bestDirtDirection = null;
+        let bestDistance = Infinity;
+        for (const [dx, dy] of directions) {
+            const checkX = this.x + dx;
+            const checkY = this.y + dy;
+            const entity = this.world.get(checkX, checkY);
+            if (entity === ENTITY_TYPES.DIRT || entity === ENTITY_TYPES.AIR) {
+                // Calculate distance from this DIRT block to target
+                const distance = Math.abs(checkX - targetX) + Math.abs(checkY - targetY);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestDirtDirection = [dx, dy];
+                }
+            }
+        }
+        if (bestDirtDirection) {
+            // Dig into the DIRT closest to target
+            this.executeMove(bestDirtDirection, true); // Track this move
+            // Stay in digging state to continue digging towards target
+            // Don't return to surface yet
+        }
+        else {
+            // No DIRT to dig, return to surface
+            this.state = 'returning_to_surface';
+        }
+    }
+    // Move back to the surface by retracing path
+    moveToSurface() {
+        if (this.y === this.surfaceY) {
+            // At surface, clear history and descend again
+            this.moveHistory = [];
+            this.state = 'going_to_target';
+            return;
+        }
+        // Pop the last move from history and reverse it
+        if (this.moveHistory.length > 0) {
+            const lastMove = this.moveHistory.pop();
+            // Reverse the move: negate both components
+            const reverseMove = [-lastMove[0], -lastMove[1]];
+            this.executeMove(reverseMove, false); // Don't track reverse moves
+        }
+    }
+    // Find the closest AIR tile to the target
+    findClosestAirToTarget() {
+        if (!this.target)
+            return null;
+        const [targetX, targetY] = this.target;
+        let closestAir = null;
+        let closestDistance = Infinity;
+        // Simple BFS to find closest AIR to target
+        const visited = new Set();
+        const queue = [[this.target, 0]];
+        visited.add(`${targetX},${targetY}`);
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        while (queue.length > 0) {
+            const [[x, y], distance] = queue.shift();
+            const entity = this.world.get(x, y);
+            if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
+                // Found AIR, check if it's reachable from current position
+                closestAir = [x, y];
+                closestDistance = distance;
+                break;
+            }
+            if (distance < 10) { // Limit search radius
+                for (const [dx, dy] of directions) {
+                    const newX = x + dx;
+                    const newY = y + dy;
+                    const key = `${newX},${newY}`;
+                    if (!visited.has(key) && this.world.isValid(newX, newY)) {
+                        const entity = this.world.get(newX, newY);
+                        if (entity !== ENTITY_TYPES.SKY) {
+                            visited.add(key);
+                            queue.push([[newX, newY], distance + 1]);
+                        }
+                    }
+                }
+            }
+        }
+        console.log("closestAir", closestAir);
+        return closestAir;
+    }
+    // Get valid moves (can move into AIR, can dig DIRT if conditions met)
     getValidMoves() {
         const validMoves = [];
-        const possibleLocations = [
-            [-1, 0], [0, 1],
-            [1, 0], [0, -1],
-        ];
-        // Check if ant can dig (surrounded by 1 AIR and 3 DIRT)
-        const airDirection = this.canDig();
-        for (const [rowOffset, colOffset] of possibleLocations) {
-            const targetX = this.x + rowOffset;
-            const targetY = this.y + colOffset;
-            const neighborEntity = this.world.get(targetX, targetY);
-            // Can always move into AIR (free movement in tunnels)
-            if (neighborEntity == ENTITY_TYPES.AIR) {
-                validMoves.push([rowOffset, colOffset]);
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dx, dy] of directions) {
+            const newX = this.x + dx;
+            const newY = this.y + dy;
+            const entity = this.world.get(newX, newY);
+            if (entity === ENTITY_TYPES.AIR) {
+                validMoves.push([dx, dy]);
             }
-            // Can only dig DIRT if tunneling conditions are met
-            else if (neighborEntity == ENTITY_TYPES.DIRT && airDirection) {
-                // Check if this is an allowed digging direction
-                if (this.isAllowedDigDirection([rowOffset, colOffset], airDirection)) {
-                    validMoves.push([rowOffset, colOffset]);
-                }
+            else if (entity === ENTITY_TYPES.DIRT) {
+                validMoves.push([dx, dy]);
             }
         }
         return validMoves;
     }
-    // Check if ant can dig (must be surrounded by exactly 1 AIR and 3 DIRT)
-    canDig() {
-        const adjacentOffsets = [
-            [-1, 0], [0, 1], [1, 0], [0, -1]
-        ];
-        let airCount = 0;
-        let dirtCount = 0;
-        let airDirection = null;
-        for (const [dx, dy] of adjacentOffsets) {
-            const entity = this.world.get(this.x + dx, this.y + dy);
-            if (entity == ENTITY_TYPES.AIR) {
-                airCount++;
-                airDirection = [dx, dy];
-            }
-            else if (entity == ENTITY_TYPES.DIRT) {
-                dirtCount++;
-            }
+    // Execute a move
+    executeMove(move, trackMove = false) {
+        const [dx, dy] = move;
+        // Track the move if requested (for retracing path)
+        if (trackMove) {
+            this.moveHistory.push([dx, dy]);
         }
-        // Can dig if exactly 1 AIR and 3 DIRT neighbors
-        if (airCount === 1 && dirtCount === 3) {
-            return airDirection;
-        }
-        return null;
+        this.world.set(this.x, this.y, ENTITY_TYPES.AIR);
+        this.x += dx;
+        this.y += dy;
+        this.world.set(this.x, this.y, ENTITY_TYPES.ANT);
     }
-    // Check if a direction is allowed for digging (90% straight, 10% corner)
-    isAllowedDigDirection(direction, airDirection) {
-        // Direction away from air (straight direction)
-        const straightDirection = [
-            -airDirection[0],
-            -airDirection[1]
-        ];
-        // Check if this is the straight direction
-        if (direction[0] === straightDirection[0] && direction[1] === straightDirection[1]) {
-            // 90% chance to allow straight digging
-            return Math.random() < 0.9;
+}
+// Hive class - manages ants and assigns targets
+class Hive {
+    constructor(world, antCount = 10) {
+        this.world = world;
+        this.ants = [];
+        this.targets = [];
+        this.spawnAnts(antCount);
+    }
+    spawnAnts(count) {
+        for (let i = 0; i < count; i++) {
+            const x = Math.floor(Math.random() * this.world.width);
+            const y = this.world.groundHeight;
+            const ant = new Ant(x, y, this.world);
+            this.ants.push(ant);
+            this.assignTarget(ant);
+            console.log(ant.target);
         }
-        // Check if this is a corner direction (perpendicular to straight)
-        // A direction is perpendicular if dot product is 0
-        const dotProduct = direction[0] * straightDirection[0] + direction[1] * straightDirection[1];
-        const isCorner = dotProduct === 0;
-        if (isCorner) {
-            // 10% chance to allow corner digging
-            return Math.random() < 0.1;
+    }
+    assignTarget(ant) {
+        // Find a good target (dirt area to dig)
+        // For now, assign random targets below ground
+        const targetX = Math.floor(Math.random() * this.world.width);
+        const targetY = this.world.groundHeight + 5 + Math.floor(Math.random() * 10);
+        if (this.world.isValid(targetX, targetY)) {
+            ant.target = [targetX, targetY];
         }
-        return false;
+    }
+    update() {
+        // Update all ants
+        for (const ant of this.ants) {
+            ant.move();
+        }
     }
 }
 // Renderer class - handles ASCII text rendering
@@ -192,11 +318,10 @@ class AntFarm {
         this.world = new World(width, height, groundHeight);
         this.display = document.getElementById('worldDisplay');
         this.asciiRenderer = new ASCIIRenderer(this.display, this.world);
-        this.ants = [];
+        this.hive = new Hive(this.world, 1);
         this.setupEventListeners();
         document.getElementById('gridSize').textContent = `${this.world.width}x${this.world.height}`;
         this.updateUI();
-        this.spawnAnts(10);
         this.asciiRenderer.updateDisplay();
     }
     setupEventListeners() {
@@ -246,23 +371,10 @@ class AntFarm {
         //tick
         this.tick++;
         // update world state
-        this.simulateAnts();
+        this.hive.update();
         //update visual state
         this.updateUI();
         console.log("finish tick ", this.tick);
-    }
-    spawnAnts(count) {
-        for (let i = 0; i < count; i++) {
-            const x = Math.floor(Math.random() * this.world.width);
-            const y = this.world.groundHeight;
-            const ant = new Ant(x, y, this.world);
-            this.ants.push(ant);
-        }
-    }
-    simulateAnts() {
-        for (const ant of this.ants) {
-            ant.move();
-        }
     }
 }
 document.addEventListener('DOMContentLoaded', () => {
