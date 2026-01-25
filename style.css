@@ -1,0 +1,48 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #c0c0c0;
+    padding: 20px;
+}
+
+#worldDisplay {
+    font-family: 'Courier New', Courier, monospace ;
+    font-size: 10px;
+    line-height: 1;
+    margin: 0;
+    padding: 10px;
+    background-color: #000;
+    color: rgb(255, 255, 255);
+    white-space: pre;
+    overflow: auto;
+    border: 2px inset;
+}
+
+.controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 10px;
+}
+
+.controls button {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.info {
+    display: flex;
+    gap: 1.5rem;
+    margin-left: auto;
+}
+
+.info span {
+    font-weight: 500;
+}
