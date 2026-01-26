@@ -5,175 +5,297 @@ export class Ant {
         this.y = y;
         this.world = world;
         this.target = target;
-        this.state = 'going_to_target';
+        this.state = 'finding_entry';
         this.surfaceY = y; // Remember where the surface is
         this.moveHistory = [];
         this.hive = hive;
+        this.entryPoint = null;
+        this.pathToEntry = null;
+        this.digPosition = null;
+        this.reachedTarget = false;
         this.world.set(x, y, ENTITY_TYPES.ANT);
     }
     move() {
         if (!this.target) {
-            console.log("notarget");
             return;
         }
-        console.log(this.state);
-        console.log(this.x, this.y, this.target);
+        //console.log(this.state, "pos:", this.x, this.y, "target:", this.target, "entry:", this.entryPoint)
         switch (this.state) {
-            case 'going_to_target':
-                this.moveTowardsTarget();
+            case 'finding_entry':
+                this.findEntryPoint();
+                break;
+            case 'moving_to_entry':
+                this.moveToEntry();
                 break;
             case 'digging':
-                this.digAtTarget();
+                this.digTowardsTarget();
                 break;
             case 'returning_to_surface':
                 this.moveToSurface();
                 break;
         }
     }
-    // Find closest AIR tile to target and move towards it
-    moveTowardsTarget() {
-        const closestAir = this.findClosestAirToTarget();
-        if (!closestAir) {
-            // No path to target, try to dig
-            this.state = 'digging';
+    // Find the air block closest to the target, then pathfind to it
+    findEntryPoint() {
+        if (!this.target)
             return;
-        }
-        // Move one step towards the closest AIR tile
-        const [targetX, targetY] = closestAir;
-        // Move in the direction that gets us closer
-        const possibleMoves = this.getValidMoves();
-        let bestMove = null;
-        let bestDistance = Infinity;
-        for (const [moveX, moveY] of possibleMoves) {
-            const newX = this.x + moveX;
-            const newY = this.y + moveY;
-            const distance = Math.abs(newX - targetX) + Math.abs(newY - targetY);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                bestMove = [moveX, moveY];
+        const [targetX, targetY] = this.target;
+        let bestAirBlock = null;
+        let closestDistanceToTarget = Infinity;
+        // Search the entire world for air blocks
+        for (let y = 0; y < this.world.height; y++) {
+            for (let x = 0; x < this.world.width; x++) {
+                const entity = this.world.get(x, y);
+                // Found an air block (not the ant's current position)
+                if ((entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) &&
+                    !(x === this.x && y === this.y)) {
+                    // Calculate Manhattan distance from this air block to the TARGET
+                    const distanceToTarget = Math.abs(x - targetX) + Math.abs(y - targetY);
+                    if (distanceToTarget < closestDistanceToTarget) {
+                        closestDistanceToTarget = distanceToTarget;
+                        bestAirBlock = [x, y];
+                    }
+                }
             }
         }
-        if (bestMove) {
-            this.executeMove(bestMove, true); // Track this move
-            // Check if we're at the target area (within 1 tile)
-            const distanceToTarget = Math.abs(this.x - targetX) + Math.abs(this.y - targetY);
-            if (distanceToTarget == 0) {
+        if (bestAirBlock) {
+            // Found an air block closest to target, now pathfind to it through air
+            this.entryPoint = bestAirBlock;
+            this.pathToEntry = this.findPathToPosition(bestAirBlock[0], bestAirBlock[1]);
+            if (this.pathToEntry && this.pathToEntry.length > 0) {
+                this.state = 'moving_to_entry';
+            }
+            else {
+                // No path through air to that block, start digging from current position
+                this.entryPoint = [this.x, this.y];
                 this.state = 'digging';
             }
         }
+        else {
+            // No air blocks found anywhere, just start digging from current position
+            this.entryPoint = [this.x, this.y];
+            this.state = 'digging';
+        }
     }
-    // Dig at target location - dig the DIRT closest to target
-    digAtTarget() {
+    // Follow the A* path to the entry point
+    moveToEntry() {
+        if (!this.pathToEntry || this.pathToEntry.length === 0) {
+            // Reached entry point, start digging
+            this.state = 'digging';
+            this.digPosition = [this.x, this.y]; // Remember where to return to
+            return;
+        }
+        // Take next step in path
+        const nextPos = this.pathToEntry.shift();
+        const dx = nextPos[0] - this.x;
+        const dy = nextPos[1] - this.y;
+        this.executeMove([dx, dy], false); // Don't track moves to entry point
+    }
+    // Dig one block towards the target, then return to surface
+    digTowardsTarget() {
         if (!this.target)
             return;
         const [targetX, targetY] = this.target;
         // Check if we've reached the target
         if (this.x === targetX && this.y === targetY) {
-            // We're at the target! Return to surface
-            this.getNewTarget();
+            // Mark that we reached the target and return to surface
+            this.reachedTarget = true;
             this.state = 'returning_to_surface';
             return;
         }
-        // Find all adjacent DIRT blocks and pick the one closest to target
-        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-        let bestDirtDirection = null;
-        let bestDistance = Infinity;
-        for (const [dx, dy] of directions) {
-            const checkX = this.x + dx;
-            const checkY = this.y + dy;
-            const entity = this.world.get(checkX, checkY);
-            if (entity === ENTITY_TYPES.DIRT) {
-                // Calculate distance from this DIRT block to target
-                const distance = Math.abs(checkX - targetX) + Math.abs(checkY - targetY);
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    bestDirtDirection = [dx, dy];
-                }
-            }
+        // Calculate direction to target
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        // Determine which direction to dig (prioritize axis with larger distance)
+        let digDir;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Dig horizontally
+            digDir = [Math.sign(dx), 0];
         }
-        if (bestDirtDirection) {
-            // Dig into the DIRT closest to target
-            this.executeMove(bestDirtDirection, true); // Track this move
-            // Carry dirt up to surface
-            this.state = 'returning_to_surface';
+        else if (Math.abs(dy) > Math.abs(dx)) {
+            // Dig vertically
+            digDir = [0, Math.sign(dy)];
+        }
+        else if (dx !== 0) {
+            // Equal distance, prefer horizontal
+            digDir = [Math.sign(dx), 0];
         }
         else {
-            // No adjacent DIRT to dig, need to navigate through air to reach target
-            // Switch back to going_to_target state to find a path through the air pocket
-            this.state = 'going_to_target';
+            // Only vertical needed
+            digDir = [0, Math.sign(dy)];
+        }
+        const [moveX, moveY] = digDir;
+        const nextX = this.x + moveX;
+        const nextY = this.y + moveY;
+        const entity = this.world.get(nextX, nextY);
+        if (entity === ENTITY_TYPES.DIRT) {
+            // Dig the dirt block
+            this.executeMove([moveX, moveY], true); // Track for return path
+            this.digPosition = [this.x, this.y]; // Remember this position
+            // Return to surface after digging
+            this.state = 'returning_to_surface';
+        }
+        else if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
+            // Hit air, just move through it
+            this.executeMove([moveX, moveY], true);
+        }
+        else {
+            // Can't dig here (SKY or invalid), try alternate direction
+            const altDigDir = moveX !== 0 ? [0, Math.sign(dy)] : [Math.sign(dx), 0];
+            const [altX, altY] = altDigDir;
+            const altNextX = this.x + altX;
+            const altNextY = this.y + altY;
+            const altEntity = this.world.get(altNextX, altNextY);
+            if (altEntity === ENTITY_TYPES.DIRT) {
+                this.executeMove([altX, altY], true);
+                this.digPosition = [this.x, this.y];
+                this.state = 'returning_to_surface';
+            }
+            else if (altEntity === ENTITY_TYPES.AIR || altEntity === ENTITY_TYPES.ANT) {
+                this.executeMove([altX, altY], true);
+            }
         }
     }
-    // Move back to the surface by retracing path
+    // Move back to the surface by pathfinding to nearest surface air block
     moveToSurface() {
         if (this.y === this.surfaceY) {
-            // At surface, clear history and descend again
-            this.moveHistory = [];
-            this.state = 'going_to_target';
+            // Check if we just completed a target
+            if (this.reachedTarget) {
+                // Completed the target! Get a new one
+                this.reachedTarget = false;
+                this.getNewTarget();
+                return;
+            }
+            // At surface, go back down to dig position
+            if (this.digPosition) {
+                // Use A* to navigate back to dig position
+                this.navigateToDigPosition();
+            }
+            else {
+                // No dig position, just continue digging
+                this.state = 'digging';
+            }
             return;
         }
-        // Pop the last move from history and reverse it
-        if (this.moveHistory.length > 0) {
-            const lastMove = this.moveHistory.pop();
-            // Reverse the move: negate both components
-            const reverseMove = [-lastMove[0], -lastMove[1]];
-            this.executeMove(reverseMove, false); // Don't track reverse moves
-        }
-    }
-    // Find the closest AIR tile to the target
-    findClosestAirToTarget() {
-        if (!this.target)
-            return null;
-        const [targetX, targetY] = this.target;
-        let closestAir = null;
+        // Find the closest AIR block on the surface
+        let closestSurfaceAir = null;
         let closestDistance = Infinity;
-        // Simple BFS to find closest AIR to target
-        const visited = new Set();
-        const queue = [[this.target, 0]];
-        visited.add(`${targetX},${targetY}`);
-        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-        while (queue.length > 0) {
-            const [[x, y], distance] = queue.shift();
-            const entity = this.world.get(x, y);
+        // Search surface level for air blocks
+        for (let x = 0; x < this.world.width; x++) {
+            const entity = this.world.get(x, this.surfaceY);
             if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
-                // Found AIR, check if it's reachable from current position
-                closestAir = [x, y];
-                closestDistance = distance;
-                break;
-            }
-            if (distance < 10) { // Limit search radius
-                for (const [dx, dy] of directions) {
-                    const newX = x + dx;
-                    const newY = y + dy;
-                    const key = `${newX},${newY}`;
-                    if (!visited.has(key) && this.world.isValid(newX, newY)) {
-                        const entity = this.world.get(newX, newY);
-                        if (entity !== ENTITY_TYPES.SKY) {
-                            visited.add(key);
-                            queue.push([[newX, newY], distance + 1]);
-                        }
-                    }
+                const distance = Math.abs(x - this.x) + Math.abs(this.surfaceY - this.y);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestSurfaceAir = [x, this.surfaceY];
                 }
             }
         }
-        console.log("closestAir", closestAir);
-        return closestAir;
-    }
-    // Get valid moves (can move into AIR, can dig DIRT if conditions met)
-    getValidMoves() {
-        const validMoves = [];
-        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-        for (const [dx, dy] of directions) {
-            const newX = this.x + dx;
-            const newY = this.y + dy;
-            const entity = this.world.get(newX, newY);
-            if (entity === ENTITY_TYPES.AIR) {
-                validMoves.push([dx, dy]);
+        if (closestSurfaceAir) {
+            // Find path to surface air block
+            const pathToSurface = this.findPathToPosition(closestSurfaceAir[0], closestSurfaceAir[1]);
+            if (pathToSurface && pathToSurface.length > 0) {
+                // Take one step along the path
+                const nextPos = pathToSurface[0];
+                const dx = nextPos[0] - this.x;
+                const dy = nextPos[1] - this.y;
+                this.executeMove([dx, dy], false);
             }
-            else if (entity === ENTITY_TYPES.DIRT) {
-                validMoves.push([dx, dy]);
+            else {
+                // Can't find path, try moving up
+                const upEntity = this.world.get(this.x, this.y - 1);
+                if (upEntity === ENTITY_TYPES.AIR || upEntity === ENTITY_TYPES.ANT) {
+                    this.executeMove([0, -1], false);
+                }
             }
         }
-        return validMoves;
+    }
+    // Navigate back to the dig position after surfacing
+    navigateToDigPosition() {
+        if (!this.digPosition) {
+            this.state = 'digging';
+            return;
+        }
+        const [targetX, targetY] = this.digPosition;
+        // Simple pathfinding back down - retrace the history we stored
+        // Actually, we need to rebuild the path
+        const path = this.findPathToPosition(targetX, targetY);
+        if (path && path.length > 0) {
+            // Follow the path
+            for (const pos of path) {
+                const dx = pos[0] - this.x;
+                const dy = pos[1] - this.y;
+                this.executeMove([dx, dy], true);
+            }
+        }
+        // Now back at dig position, continue digging
+        this.state = 'digging';
+    }
+    // Find path through AIR to a specific position
+    findPathToPosition(targetX, targetY) {
+        const startKey = `${this.x},${this.y}`;
+        const targetKey = `${targetX},${targetY}`;
+        if (startKey === targetKey)
+            return [];
+        const openSet = new Set([startKey]);
+        const cameFrom = new Map();
+        const gScore = new Map();
+        const fScore = new Map();
+        gScore.set(startKey, 0);
+        fScore.set(startKey, this.heuristic(this.x, this.y, targetX, targetY));
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        while (openSet.size > 0) {
+            let current = '';
+            let lowestF = Infinity;
+            for (const node of openSet) {
+                const f = fScore.get(node) ?? Infinity;
+                if (f < lowestF) {
+                    lowestF = f;
+                    current = node;
+                }
+            }
+            if (current === targetKey) {
+                return this.reconstructPath(cameFrom, current);
+            }
+            openSet.delete(current);
+            const [cx, cy] = current.split(',').map(Number);
+            for (const [dx, dy] of directions) {
+                const nx = cx + dx;
+                const ny = cy + dy;
+                if (!this.world.isValid(nx, ny))
+                    continue;
+                const neighborEntity = this.world.get(nx, ny);
+                if (neighborEntity !== ENTITY_TYPES.AIR && neighborEntity !== ENTITY_TYPES.ANT)
+                    continue;
+                const neighborKey = `${nx},${ny}`;
+                const tentativeGScore = (gScore.get(current) ?? Infinity) + 1;
+                if (tentativeGScore < (gScore.get(neighborKey) ?? Infinity)) {
+                    cameFrom.set(neighborKey, current);
+                    gScore.set(neighborKey, tentativeGScore);
+                    fScore.set(neighborKey, tentativeGScore + this.heuristic(nx, ny, targetX, targetY));
+                    openSet.add(neighborKey);
+                }
+            }
+        }
+        return null; // No path found
+    }
+    // Manhattan distance heuristic
+    heuristic(x1, y1, x2, y2) {
+        return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+    }
+    // Reconstruct path from A* came-from map
+    reconstructPath(cameFrom, current) {
+        const path = [];
+        const [cx, cy] = current.split(',').map(Number);
+        path.push([cx, cy]);
+        while (cameFrom.has(current)) {
+            current = cameFrom.get(current);
+            const [x, y] = current.split(',').map(Number);
+            path.unshift([x, y]);
+        }
+        // Remove first element (current position)
+        path.shift();
+        return path;
     }
     // Execute a move
     executeMove(move, trackMove = false) {
@@ -189,5 +311,12 @@ export class Ant {
     }
     getNewTarget() {
         this.hive.assignTarget(this);
+        // Reset state to find new entry point
+        this.entryPoint = null;
+        this.pathToEntry = null;
+        this.digPosition = null;
+        this.moveHistory = [];
+        this.reachedTarget = false;
+        this.state = 'finding_entry';
     }
 }

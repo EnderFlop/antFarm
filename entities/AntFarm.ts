@@ -12,15 +12,15 @@ export class AntFarm {
     asciiRenderer: ASCIIRenderer;
     hive: Hive;
 
-    constructor(width = 100, height = 100, groundHeight = 10) {
+    constructor(options: { width: number, height: number, groundHeight: number, numberOfAnts: number }) {
         this.tick = 0;
         this.isRunning = false;
         this.animationFrame = null;
 
-        this.world = new World(width, height, groundHeight);
+        this.world = new World(options.width, options.height, options.groundHeight);
         this.display = document.getElementById('worldDisplay')!;
         this.asciiRenderer = new ASCIIRenderer(this.display, this.world);
-        this.hive = new Hive(this.world, 1);
+        this.hive = new Hive(this.world, options.numberOfAnts);
         
         this.setupEventListeners();
         document.getElementById('gridSize')!.textContent = `${this.world.width}x${this.world.height}`;
@@ -87,7 +87,6 @@ export class AntFarm {
         this.hive.update();
         //update visual state
         this.updateUI();
-        console.log("finish tick ", this.tick);
     }
 
 }

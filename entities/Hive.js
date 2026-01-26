@@ -14,14 +14,13 @@ export class Hive {
             const ant = new Ant(x, y, this.world, this);
             this.ants.push(ant);
             this.assignTarget(ant);
-            console.log(ant.target);
         }
     }
     assignTarget(ant) {
         // Find a good target (dirt area to dig)
         // For now, assign random targets below ground
         const targetX = Math.floor(Math.random() * this.world.width);
-        const targetY = this.world.groundHeight + 5 + Math.floor(Math.random() * 10);
+        const targetY = this.world.groundHeight + Math.floor(Math.random() * (this.world.height - this.world.groundHeight));
         if (this.world.isValid(targetX, targetY)) {
             ant.target = [targetX, targetY];
         }
