@@ -1,4 +1,5 @@
 import { ENTITY_TYPES } from './constants.js';
+import { Hive } from './Hive.js';
 import { World } from './World.js';
 
 export class Ant {
@@ -9,8 +10,9 @@ export class Ant {
     state: 'going_to_target' | 'digging' | 'returning_to_surface' | 'error';
     surfaceY: number;
     moveHistory: [number, number][]; // Stack of moves to retrace
+    hive: Hive;
 
-    constructor(x: number, y: number, world: World, target: [number, number] | null = null) {
+    constructor(x: number, y: number, world: World, hive: Hive, target: [number, number] | null = null) {
         this.x = x;
         this.y = y;
         this.world = world;
@@ -18,6 +20,7 @@ export class Ant {
         this.state = 'going_to_target';
         this.surfaceY = y; // Remember where the surface is
         this.moveHistory = [];
+        this.hive = hive;
         this.world.set(x, y, ENTITY_TYPES.ANT);
     }
 
@@ -76,7 +79,7 @@ export class Ant {
             
             // Check if we're at the target area (within 1 tile)
             const distanceToTarget = Math.abs(this.x - targetX) + Math.abs(this.y - targetY);
-            if (distanceToTarget <= 1) {
+            if (distanceToTarget == 0) {
                 this.state = 'digging';
             }
         }
@@ -91,6 +94,7 @@ export class Ant {
         // Check if we've reached the target
         if (this.x === targetX && this.y === targetY) {
             // We're at the target! Return to surface
+            this.getNewTarget();
             this.state = 'returning_to_surface';
             return;
         }
@@ -105,7 +109,7 @@ export class Ant {
             const checkY = this.y + dy;
             const entity = this.world.get(checkX, checkY);
             
-            if (entity === ENTITY_TYPES.DIRT || entity === ENTITY_TYPES.AIR) {
+            if (entity === ENTITY_TYPES.DIRT) {
                 // Calculate distance from this DIRT block to target
                 const distance = Math.abs(checkX - targetX) + Math.abs(checkY - targetY);
                 if (distance < bestDistance) {
@@ -118,11 +122,12 @@ export class Ant {
         if (bestDirtDirection) {
             // Dig into the DIRT closest to target
             this.executeMove(bestDirtDirection, true); // Track this move
-            // Stay in digging state to continue digging towards target
-            // Don't return to surface yet
-        } else {
-            // No DIRT to dig, return to surface
+            // Carry dirt up to surface
             this.state = 'returning_to_surface';
+        } else {
+            // No adjacent DIRT to dig, need to navigate through air to reach target
+            // Switch back to going_to_target state to find a path through the air pocket
+            this.state = 'going_to_target';
         }
     }
 
@@ -224,5 +229,9 @@ export class Ant {
         this.x += dx;
         this.y += dy;
         this.world.set(this.x, this.y, ENTITY_TYPES.ANT);
+    }
+
+    getNewTarget() {
+        this.hive.assignTarget(this);
     }
 }

@@ -11,7 +11,7 @@ export class Hive {
         for (let i = 0; i < count; i++) {
             const x = Math.floor(Math.random() * this.world.width);
             const y = this.world.groundHeight;
-            const ant = new Ant(x, y, this.world);
+            const ant = new Ant(x, y, this.world, this);
             this.ants.push(ant);
             this.assignTarget(ant);
             console.log(ant.target);
