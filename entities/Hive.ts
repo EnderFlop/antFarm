@@ -15,12 +15,12 @@ export class Hive {
     nextTaskId: number;
     maxConcurrentTasks: number;
 
-    constructor(world: World, antCount: number = 10) {
+    constructor(world: World, antCount: number = 10, maxTasks: number = 3) {
         this.world = world;
         this.ants = [];
         this.tasks = [];
         this.nextTaskId = 0;
-        this.maxConcurrentTasks = 3;
+        this.maxConcurrentTasks = maxTasks;
 
         this.spawnAnts(antCount);
         this.initializeTasks();
@@ -59,7 +59,6 @@ export class Hive {
         };
 
         this.tasks.push(task);
-        console.log(`Created new task ${task.id} at (${targetX}, ${targetY})`);
         return task;
     }
 
@@ -70,7 +69,6 @@ export class Hive {
             ant.taskId = taskId;
             ant.target = task.target;
             ant.resetForNewTarget(); // Reset ant state for new task
-            console.log(`Assigned ant to task ${taskId}, target: (${task.target[0]}, ${task.target[1]})`);
         }
     }
 
@@ -81,8 +79,6 @@ export class Hive {
 
         const completedTask = this.tasks[taskIndex];
         const antsToReassign = Array.from(completedTask.assignedAnts);
-        
-        console.log(`Task ${taskId} completed! Reassigning ${antsToReassign.length} ants`);
 
         // Remove the completed task
         this.tasks.splice(taskIndex, 1);

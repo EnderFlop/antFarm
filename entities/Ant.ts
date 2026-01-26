@@ -57,15 +57,16 @@ export class Ant {
         }
     }
 
-    // Find the air block closest to the target, then pathfind to it
+    // Find the air block closest to the target, prioritizing anthills and underground air
     findEntryPoint() {
         if (!this.target) return;
 
         const [targetX, targetY] = this.target;
+        const crustLevel = this.world.groundHeight + 1;
         let bestAirBlock: [number, number] | null = null;
         let closestDistanceToTarget = Infinity;
 
-        // Search the entire world for air blocks
+        // Search the entire world for accessible air blocks
         for (let y = 0; y < this.world.height; y++) {
             for (let x = 0; x < this.world.width; x++) {
                 const entity = this.world.get(x, y);
@@ -73,12 +74,18 @@ export class Ant {
                 // Found an air block (not the ant's current position)
                 if ((entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) && 
                     !(x === this.x && y === this.y)) {
-                    // Calculate Manhattan distance from this air block to the TARGET
-                    const distanceToTarget = Math.abs(x - targetX) + Math.abs(y - targetY);
                     
-                    if (distanceToTarget < closestDistanceToTarget) {
-                        closestDistanceToTarget = distanceToTarget;
-                        bestAirBlock = [x, y];
+                    // Only consider air blocks that provide underground access:
+                    // 1. Below the crust layer (underground tunnels)
+                    // 2. AT the crust layer (anthills - holes in the crust)
+                    if (y >= crustLevel) {
+                        // Calculate Manhattan distance from this air block to the TARGET
+                        const distanceToTarget = Math.abs(x - targetX) + Math.abs(y - targetY);
+                        
+                        if (distanceToTarget < closestDistanceToTarget) {
+                            closestDistanceToTarget = distanceToTarget;
+                            bestAirBlock = [x, y];
+                        }
                     }
                 }
             }
@@ -169,6 +176,22 @@ export class Ant {
         } else if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
             // Hit air, just move through it
             this.executeMove([moveX, moveY], true);
+        } else if (entity === ENTITY_TYPES.CRUST) {
+            // Can't dig through crust! Try alternate direction
+            const altDigDir: [number, number] = moveX !== 0 ? [0, Math.sign(dy)] : [Math.sign(dx), 0];
+            const [altX, altY] = altDigDir;
+            const altNextX = this.x + altX;
+            const altNextY = this.y + altY;
+            const altEntity = this.world.get(altNextX, altNextY);
+            
+            if (altEntity === ENTITY_TYPES.DIRT) {
+                this.executeMove([altX, altY], true);
+                this.digPosition = [this.x, this.y];
+                this.state = 'returning_to_surface';
+            } else if (altEntity === ENTITY_TYPES.AIR || altEntity === ENTITY_TYPES.ANT) {
+                this.executeMove([altX, altY], true);
+            }
+            // If alternate is also crust/sky/invalid, ant will stay in place this tick
         } else {
             // Can't dig here (SKY or invalid), try alternate direction
             const altDigDir: [number, number] = moveX !== 0 ? [0, Math.sign(dy)] : [Math.sign(dx), 0];

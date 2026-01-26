@@ -7,10 +7,14 @@ export class AntFarm {
         this.tick = 0;
         this.isRunning = false;
         this.animationFrame = null;
-        this.world = new World(options.width, options.height, options.groundHeight);
+        // Initialize TPS tracking
+        this.ticksInLastSecond = 0;
+        this.lastTPSUpdate = performance.now();
+        this.currentTPS = 0;
+        this.world = new World(options.width, options.height, options.groundHeight, options.anthillCount);
         this.display = document.getElementById('worldDisplay');
         this.asciiRenderer = new ASCIIRenderer(this.display, this.world);
-        this.hive = new Hive(this.world, options.numberOfAnts);
+        this.hive = new Hive(this.world, options.numberOfAnts, options.maxTasks);
         this.setupEventListeners();
         document.getElementById('gridSize').textContent = `${this.world.width}x${this.world.height}`;
         this.updateUI();
@@ -58,12 +62,26 @@ export class AntFarm {
     updateUI() {
         this.asciiRenderer.updateDisplay();
         document.getElementById('tick').textContent = this.tick.toString();
+        document.getElementById('tps').textContent = this.currentTPS.toFixed(1);
+    }
+    updateTPS() {
+        const now = performance.now();
+        const elapsed = now - this.lastTPSUpdate;
+        // Update TPS every second
+        if (elapsed >= 1000) {
+            this.currentTPS = (this.ticksInLastSecond / elapsed) * 1000;
+            this.ticksInLastSecond = 0;
+            this.lastTPSUpdate = now;
+        }
     }
     step() {
         //tick
         this.tick++;
+        this.ticksInLastSecond++;
         // update world state
         this.hive.update();
+        // update TPS counter
+        this.updateTPS();
         //update visual state
         this.updateUI();
     }
