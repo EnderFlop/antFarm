@@ -7,7 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
         height: 60,
         groundHeight: 5,
         numberOfAnts: 10,
-        anthillCount: 2,
-        maxTasks: 2
+        anthillCount: 1,
+        maxTasks: 1,
+        wanderProbability: 0.005,
+        momentumProbability: 0.8    
     });
 });

@@ -14,13 +14,17 @@ export class Hive {
     tasks: Task[];
     nextTaskId: number;
     maxConcurrentTasks: number;
+    wanderProbability: number;
+    momentumProbability: number;
 
-    constructor(world: World, antCount: number = 10, maxTasks: number = 3) {
+    constructor(world: World, antCount: number = 10, maxTasks: number = 3, wanderProbability: number = 0.05, momentumProbability: number = 0.9) {
         this.world = world;
         this.ants = [];
         this.tasks = [];
         this.nextTaskId = 0;
         this.maxConcurrentTasks = maxTasks;
+        this.wanderProbability = wanderProbability;
+        this.momentumProbability = momentumProbability;
 
         this.spawnAnts(antCount);
         this.initializeTasks();
@@ -30,7 +34,7 @@ export class Hive {
         for (let i = 0; i < count; i++) {
             const x = Math.floor(Math.random() * this.world.width);
             const y = this.world.groundHeight;
-            const ant = new Ant(x, y, this.world, this);
+            const ant = new Ant(x, y, this.world, this, this.wanderProbability, this.momentumProbability);
             this.ants.push(ant);
         }
     }

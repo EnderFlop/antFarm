@@ -1,6 +1,13 @@
 import { ENTITY_TYPES } from './constants.js';
+// Cardinal directions
+const CARDINAL_DIRECTIONS = [
+    [1, 0], // Right
+    [-1, 0], // Left
+    [0, 1], // Down
+    [0, -1] // Up
+];
 export class Ant {
-    constructor(x, y, world, hive, target = null) {
+    constructor(x, y, world, hive, wanderProbability = 0.05, momentumProbability = 0.9, target = null) {
         this.x = x;
         this.y = y;
         this.world = world;
@@ -15,6 +22,8 @@ export class Ant {
         this.reachedTarget = false;
         this.taskId = null;
         this.lastDigDirection = null; // No initial momentum
+        this.wanderProbability = wanderProbability;
+        this.momentumProbability = momentumProbability;
         this.world.set(x, y, ENTITY_TYPES.ANT);
     }
     move() {
@@ -99,6 +108,52 @@ export class Ant {
         const dy = nextPos[1] - this.y;
         this.executeMove([dx, dy], false); // Don't track moves to entry point
     }
+    // Utility: Calculate direction toward a delta (prioritizes larger axis)
+    calculateDirectionTowardsDelta(dx, dy) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Move horizontally
+            return [Math.sign(dx), 0];
+        }
+        else if (Math.abs(dy) > Math.abs(dx)) {
+            // Move vertically
+            return [0, Math.sign(dy)];
+        }
+        else if (dx !== 0) {
+            // Equal distance, prefer horizontal
+            return [Math.sign(dx), 0];
+        }
+        else {
+            // Only vertical needed
+            return [0, Math.sign(dy)];
+        }
+    }
+    // Utility: Try alternate (perpendicular) direction when primary is blocked
+    tryAlternateDirection(primaryDir, dx, dy) {
+        const [moveX, moveY] = primaryDir;
+        // Calculate perpendicular direction
+        const altDir = moveX !== 0 ? [0, Math.sign(dy)] : [Math.sign(dx), 0];
+        const [altX, altY] = altDir;
+        // Check what's in the alternate direction
+        const altNextX = this.x + altX;
+        const altNextY = this.y + altY;
+        const altEntity = this.world.get(altNextX, altNextY);
+        if (altEntity === ENTITY_TYPES.DIRT) {
+            // Can dig in alternate direction
+            this.executeMove([altX, altY], true);
+            this.lastDigDirection = [altX, altY];
+            this.digPosition = [this.x, this.y];
+            this.state = 'returning_to_surface';
+            return true;
+        }
+        else if (altEntity === ENTITY_TYPES.AIR || altEntity === ENTITY_TYPES.ANT) {
+            // Can move through air in alternate direction
+            this.executeMove([altX, altY], true);
+            this.lastDigDirection = [altX, altY];
+            return true;
+        }
+        // Alternate direction also blocked
+        return false;
+    }
     // Dig one block towards the target with organic movement
     digTowardsTarget() {
         if (!this.target)
@@ -116,16 +171,13 @@ export class Ant {
         const dy = targetY - this.y;
         // Determine which direction to dig with momentum and randomness
         let digDir;
-        // 20% chance to deviate from optimal path (random wandering)
-        const shouldWander = Math.random() < 0.05;
-        // 60% chance to continue in last direction if we have momentum (directional inertia)
-        const shouldContinue = this.lastDigDirection !== null && Math.random() < 0.9;
+        // Chance to deviate from optimal path (random wandering)
+        const shouldWander = Math.random() < this.wanderProbability;
+        // Chance to continue in last direction if we have momentum (directional inertia)
+        const shouldContinue = this.lastDigDirection !== null && Math.random() < this.momentumProbability;
         if (shouldWander) {
-            // Random wandering: pick a random valid direction
-            const directions = [
-                [1, 0], [-1, 0], [0, 1], [0, -1]
-            ];
-            digDir = directions[Math.floor(Math.random() * directions.length)];
+            // Random wandering: pick a random cardinal direction
+            digDir = CARDINAL_DIRECTIONS[Math.floor(Math.random() * CARDINAL_DIRECTIONS.length)];
         }
         else if (shouldContinue && this.lastDigDirection) {
             // Check if momentum would widen a tunnel
@@ -150,18 +202,7 @@ export class Ant {
             // If momentum would widen tunnel, break momentum and path toward target instead
             if (wouldWiden) {
                 // Break momentum, recalculate toward target
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    digDir = [Math.sign(dx), 0];
-                }
-                else if (Math.abs(dy) > Math.abs(dx)) {
-                    digDir = [0, Math.sign(dy)];
-                }
-                else if (dx !== 0) {
-                    digDir = [Math.sign(dx), 0];
-                }
-                else {
-                    digDir = [0, Math.sign(dy)];
-                }
+                digDir = this.calculateDirectionTowardsDelta(dx, dy);
             }
             else {
                 // Momentum won't widen, continue in same direction
@@ -169,23 +210,8 @@ export class Ant {
             }
         }
         else {
-            // Normal pathfinding toward target (80% of the time without momentum)
-            if (Math.abs(dx) > Math.abs(dy)) {
-                // Dig horizontally
-                digDir = [Math.sign(dx), 0];
-            }
-            else if (Math.abs(dy) > Math.abs(dx)) {
-                // Dig vertically
-                digDir = [0, Math.sign(dy)];
-            }
-            else if (dx !== 0) {
-                // Equal distance, prefer horizontal
-                digDir = [Math.sign(dx), 0];
-            }
-            else {
-                // Only vertical needed
-                digDir = [0, Math.sign(dy)];
-            }
+            // Normal pathfinding toward target
+            digDir = this.calculateDirectionTowardsDelta(dx, dy);
         }
         const [moveX, moveY] = digDir;
         const nextX = this.x + moveX;
@@ -193,10 +219,9 @@ export class Ant {
         const entity = this.world.get(nextX, nextY);
         if (entity === ENTITY_TYPES.DIRT) {
             // Dig the dirt block
-            this.executeMove([moveX, moveY], true); // Track for return path
-            this.lastDigDirection = [moveX, moveY]; // Remember this direction for momentum
-            this.digPosition = [this.x, this.y]; // Remember this position
-            // Return to surface after digging
+            this.executeMove([moveX, moveY], true);
+            this.lastDigDirection = [moveX, moveY];
+            this.digPosition = [this.x, this.y];
             this.state = 'returning_to_surface';
         }
         else if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
@@ -204,42 +229,10 @@ export class Ant {
             this.executeMove([moveX, moveY], true);
             //this.lastDigDirection = [moveX, moveY]; // Update momentum even when moving through air
         }
-        else if (entity === ENTITY_TYPES.CRUST) {
-            // Can't dig through crust! Try alternate direction
-            const altDigDir = moveX !== 0 ? [0, Math.sign(dy)] : [Math.sign(dx), 0];
-            const [altX, altY] = altDigDir;
-            const altNextX = this.x + altX;
-            const altNextY = this.y + altY;
-            const altEntity = this.world.get(altNextX, altNextY);
-            if (altEntity === ENTITY_TYPES.DIRT) {
-                this.executeMove([altX, altY], true);
-                this.lastDigDirection = [altX, altY];
-                this.digPosition = [this.x, this.y];
-                this.state = 'returning_to_surface';
-            }
-            else if (altEntity === ENTITY_TYPES.AIR || altEntity === ENTITY_TYPES.ANT) {
-                this.executeMove([altX, altY], true);
-                this.lastDigDirection = [altX, altY];
-            }
-            // If alternate is also crust/sky/invalid, ant will stay in place this tick
-        }
         else {
-            // Can't dig here (SKY or invalid), try alternate direction
-            const altDigDir = moveX !== 0 ? [0, Math.sign(dy)] : [Math.sign(dx), 0];
-            const [altX, altY] = altDigDir;
-            const altNextX = this.x + altX;
-            const altNextY = this.y + altY;
-            const altEntity = this.world.get(altNextX, altNextY);
-            if (altEntity === ENTITY_TYPES.DIRT) {
-                this.executeMove([altX, altY], true);
-                this.lastDigDirection = [altX, altY];
-                this.digPosition = [this.x, this.y];
-                this.state = 'returning_to_surface';
-            }
-            else if (altEntity === ENTITY_TYPES.AIR || altEntity === ENTITY_TYPES.ANT) {
-                this.executeMove([altX, altY], true);
-                this.lastDigDirection = [altX, altY];
-            }
+            // Can't dig here (CRUST, SKY, or invalid), try alternate direction
+            this.tryAlternateDirection([moveX, moveY], dx, dy);
+            // If alternate also blocked, ant stays in place this tick
         }
     }
     // Move back to the surface by pathfinding to nearest surface air block
