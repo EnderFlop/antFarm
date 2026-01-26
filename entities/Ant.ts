@@ -15,6 +15,7 @@ export class Ant {
     pathToEntry: [number, number][] | null; // A* path to entry point
     digPosition: [number, number] | null; // Where to return to after surfacing
     reachedTarget: boolean; // Flag to track if we reached the target
+    taskId: number | null; // Which task this ant is working on
 
     constructor(x: number, y: number, world: World, hive: Hive, target: [number, number] | null = null) {
         this.x = x;
@@ -29,6 +30,7 @@ export class Ant {
         this.pathToEntry = null;
         this.digPosition = null;
         this.reachedTarget = false;
+        this.taskId = null;
         this.world.set(x, y, ENTITY_TYPES.ANT);
     }
 
@@ -190,9 +192,12 @@ export class Ant {
         if (this.y === this.surfaceY) {
             // Check if we just completed a target
             if (this.reachedTarget) {
-                // Completed the target! Get a new one
+                // Completed the target! Notify the hive
                 this.reachedTarget = false;
-                this.getNewTarget();
+                if (this.taskId !== null) {
+                    this.hive.onTaskCompleted(this.taskId);
+                }
+                // State will be reset when hive assigns new task
                 return;
             }
             
@@ -365,9 +370,8 @@ export class Ant {
         this.world.set(this.x, this.y, ENTITY_TYPES.ANT);
     }
 
-    getNewTarget() {
-        this.hive.assignTarget(this);
-        // Reset state to find new entry point
+    // Reset ant state when assigned to a new task/target
+    resetForNewTarget() {
         this.entryPoint = null;
         this.pathToEntry = null;
         this.digPosition = null;
