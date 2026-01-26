@@ -2,11 +2,11 @@ import { AntFarm } from './entities/AntFarm.js';
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Ant Farm initialized');
     const antFarm = new AntFarm({
-        width: 220,
-        height: 50,
+        width: 150,
+        height: 60,
         groundHeight: 5,
-        numberOfAnts: 100,
+        numberOfAnts: 10,
         anthillCount: 2,
-        maxTasks: 5
+        maxTasks: 2
     });
 });
