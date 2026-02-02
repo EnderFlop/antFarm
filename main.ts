@@ -7,6 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
         height: 40,
         groundHeight: 5,
         numberOfAnts: 5,
-        anthillCount: 3,
+        anthillCount: 1,
     });
 });

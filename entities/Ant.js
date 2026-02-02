@@ -70,8 +70,46 @@ export class Ant {
     }
     // Score a neighbor (to be implemented with criteria)
     scoreNeighbor(neighbor) {
-        // Placeholder scoring - all neighbors equal for now
-        return Math.random();
+        let score = Math.random();
+        const [nx, ny] = neighbor.position;
+        // Rule 1: Favor tiles below current position
+        if (ny > this.y) {
+            score += 1;
+        }
+        // Rule 2: If on surface, favor tiles that move toward nearest anthill
+        if (this.y === this.world.groundHeight) {
+            const nearestAnthill = this.findNearestAnthill();
+            if (nearestAnthill) {
+                const [anthillX, anthillY] = nearestAnthill;
+                const currentDistanceToAnthill = Math.abs(this.x - anthillX) + Math.abs(this.y - anthillY);
+                const neighborDistanceToAnthill = Math.abs(nx - anthillX) + Math.abs(ny - anthillY);
+                // If neighbor is closer to anthill, favor it
+                if (neighborDistanceToAnthill < currentDistanceToAnthill) {
+                    score += 2;
+                }
+            }
+        }
+        return score;
+    }
+    // Find the nearest anthill (AIR in crust layer)
+    findNearestAnthill() {
+        const crustY = this.world.groundHeight + 1;
+        let nearestAnthill = null;
+        let nearestDistance = Infinity;
+        // Search the crust layer for anthills (AIR tiles)
+        for (let i = 0; i < this.world.width; i++) {
+            const left = this.x - i;
+            const right = this.x + i;
+            const leftEntity = this.world.get(left, crustY);
+            const rightEntity = this.world.get(right, crustY);
+            if (leftEntity === ENTITY_TYPES.AIR) {
+                nearestAnthill = [left, crustY];
+            }
+            if (rightEntity === ENTITY_TYPES.AIR) {
+                nearestAnthill = [right, crustY];
+            }
+        }
+        return nearestAnthill;
     }
     // Dig the current dirt block and change to RETURNING state
     dig() {
