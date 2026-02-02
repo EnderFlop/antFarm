@@ -7,7 +7,5 @@ document.addEventListener('DOMContentLoaded', () => {
         groundHeight: 5,
         numberOfAnts: 5,
         anthillCount: 3,
-        wanderProbability: 0.001,
-        momentumProbability: 0.6
     });
 });
