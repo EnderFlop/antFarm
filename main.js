@@ -2,13 +2,12 @@ import { AntFarm } from './entities/AntFarm.js';
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Ant Farm initialized');
     const antFarm = new AntFarm({
-        width: 150,
-        height: 60,
+        width: 160,
+        height: 40,
         groundHeight: 5,
-        numberOfAnts: 10,
-        anthillCount: 1,
-        maxTasks: 1,
-        wanderProbability: 0.005,
-        momentumProbability: 0.8
+        numberOfAnts: 5,
+        anthillCount: 3,
+        wanderProbability: 0.001,
+        momentumProbability: 0.6
     });
 });

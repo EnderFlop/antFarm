@@ -23,7 +23,6 @@ export class AntFarm {
         groundHeight: number, 
         numberOfAnts: number, 
         anthillCount: number, 
-        maxTasks: number,
         wanderProbability: number,
         momentumProbability: number
     }) {
@@ -39,7 +38,7 @@ export class AntFarm {
         this.world = new World(options.width, options.height, options.groundHeight, options.anthillCount);
         this.display = document.getElementById('worldDisplay')!;
         this.asciiRenderer = new ASCIIRenderer(this.display, this.world);
-        this.hive = new Hive(this.world, options.numberOfAnts, options.maxTasks, options.wanderProbability, options.momentumProbability);
+        this.hive = new Hive(this.world, options.numberOfAnts, options.wanderProbability, options.momentumProbability);
         
         this.setupEventListeners();
         document.getElementById('gridSize')!.textContent = `${this.world.width}x${this.world.height}`;
