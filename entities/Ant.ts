@@ -1,17 +1,7 @@
-import { ENTITY_TYPES } from './constants.js';
+import { ENTITY_TYPES, CARDINAL_DIRECTIONS, Position } from './constants.js';
 import { Hive } from './Hive.js';
 import { World } from './World.js';
-
-// Type alias for coordinates
-type Position = [number, number];
-
-// Cardinal directions
-const CARDINAL_DIRECTIONS: Position[] = [
-    [1, 0],   // Right
-    [-1, 0],  // Left
-    [0, 1],   // Down
-    [0, -1]   // Up
-];
+import { findPathThroughAir } from './pathfinding.js';
 
 type AntState = 'SEARCHING' | 'RETURNING';
 
@@ -132,7 +122,7 @@ export class Ant {
         
         // Build path if we don't have one
         if (!this.pathToDeposit || this.pathToDeposit.length === 0) {
-            this.pathToDeposit = this.findPathToPosition(targetX, targetY);
+            this.pathToDeposit = findPathThroughAir(this.world, this.x, this.y, targetX, targetY);
             
             // If no path found, stay in place
             if (!this.pathToDeposit || this.pathToDeposit.length === 0) {
@@ -143,87 +133,6 @@ export class Ant {
         // Take one step along the path
         const nextPos = this.pathToDeposit.shift()!;
         this.moveTo(nextPos[0], nextPos[1]);
-    }
-    
-    // A* pathfinding through AIR to a specific position
-    findPathToPosition(targetX: number, targetY: number): Position[] | null {
-        const startKey = `${this.x},${this.y}`;
-        const targetKey = `${targetX},${targetY}`;
-        
-        if (startKey === targetKey) return [];
-
-        const openSet = new Set<string>([startKey]);
-        const cameFrom = new Map<string, string>();
-        const gScore = new Map<string, number>();
-        const fScore = new Map<string, number>();
-        
-        gScore.set(startKey, 0);
-        fScore.set(startKey, this.heuristic(this.x, this.y, targetX, targetY));
-
-        while (openSet.size > 0) {
-            // Find node with lowest fScore
-            let current = '';
-            let lowestF = Infinity;
-            for (const node of openSet) {
-                const f = fScore.get(node) ?? Infinity;
-                if (f < lowestF) {
-                    lowestF = f;
-                    current = node;
-                }
-            }
-
-            if (current === targetKey) {
-                return this.reconstructPath(cameFrom, current);
-            }
-
-            openSet.delete(current);
-            const [cx, cy] = current.split(',').map(Number);
-
-            for (const [dx, dy] of CARDINAL_DIRECTIONS) {
-                const nx = cx + dx;
-                const ny = cy + dy;
-                
-                if (!this.world.isValid(nx, ny)) continue;
-                
-                const neighborEntity = this.world.get(nx, ny);
-                // Can only move through AIR or other ANTs
-                if (neighborEntity !== ENTITY_TYPES.AIR && neighborEntity !== ENTITY_TYPES.ANT) continue;
-
-                const neighborKey = `${nx},${ny}`;
-                const tentativeGScore = (gScore.get(current) ?? Infinity) + 1;
-
-                if (tentativeGScore < (gScore.get(neighborKey) ?? Infinity)) {
-                    cameFrom.set(neighborKey, current);
-                    gScore.set(neighborKey, tentativeGScore);
-                    fScore.set(neighborKey, tentativeGScore + this.heuristic(nx, ny, targetX, targetY));
-                    openSet.add(neighborKey);
-                }
-            }
-        }
-
-        return null; // No path found
-    }
-    
-    // Manhattan distance heuristic
-    heuristic(x1: number, y1: number, x2: number, y2: number): number {
-        return Math.abs(x1 - x2) + Math.abs(y1 - y2);
-    }
-    
-    // Reconstruct path from A* came-from map
-    reconstructPath(cameFrom: Map<string, string>, current: string): Position[] {
-        const path: Position[] = [];
-        const [cx, cy] = current.split(',').map(Number);
-        path.push([cx, cy]);
-
-        while (cameFrom.has(current)) {
-            current = cameFrom.get(current)!;
-            const [x, y] = current.split(',').map(Number);
-            path.unshift([x, y]);
-        }
-
-        // Remove first element (current position)
-        path.shift();
-        return path;
     }
 
     // Deposit dirt and go back to SEARCHING

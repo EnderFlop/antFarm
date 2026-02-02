@@ -16,3 +16,10 @@ export const ENTITY_CHARS = {
     [ENTITY_TYPES.CRUST]: '#', // Solid block - undiggable
     [ENTITY_TYPES.ERROR]: 'X'
 };
+// Cardinal directions
+export const CARDINAL_DIRECTIONS = [
+    [1, 0], // Right
+    [-1, 0], // Left
+    [0, 1], // Down
+    [0, -1] // Up
+];
