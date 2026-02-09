@@ -94,8 +94,6 @@ export class Ant {
     // Find the nearest anthill (AIR in crust layer)
     findNearestAnthill() {
         const crustY = this.world.groundHeight + 1;
-        let nearestAnthill = null;
-        let nearestDistance = Infinity;
         // Search the crust layer for anthills (AIR tiles)
         for (let i = 0; i < this.world.width; i++) {
             const left = this.x - i;
@@ -103,13 +101,13 @@ export class Ant {
             const leftEntity = this.world.get(left, crustY);
             const rightEntity = this.world.get(right, crustY);
             if (leftEntity === ENTITY_TYPES.AIR) {
-                nearestAnthill = [left, crustY];
+                return [left, crustY];
             }
             if (rightEntity === ENTITY_TYPES.AIR) {
-                nearestAnthill = [right, crustY];
+                return [right, crustY];
             }
         }
-        return nearestAnthill;
+        return null;
     }
     // Dig the current dirt block and change to RETURNING state
     dig() {
