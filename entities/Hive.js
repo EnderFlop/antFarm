@@ -11,24 +11,33 @@ export class Hive {
         this.buildTaskMap();
         this.spawnAnts(antCount);
     }
-    // ── Task map construction ─────────────────────────────────────────
     /**
-     * Populate the task queue with dig coordinates.
-     * For now these are random dirt tiles beneath the crust.
-     * This will be replaced with proper map generation later.
+     * Generate rooms by picking random center points and carving
+     * rectangles of random size. Every dirt tile inside each rectangle
+     * is marked as a TASK and added to the queue.
      */
     buildTaskMap() {
         const minY = this.world.groundHeight + 2; // below the crust layer
         const maxY = this.world.height - 1;
-        const batchSize = 200;
-        for (let i = 0; i < batchSize; i++) {
-            for (let attempt = 0; attempt < 50; attempt++) {
-                const rx = Math.floor(Math.random() * this.world.width);
-                const ry = minY + Math.floor(Math.random() * (maxY - minY + 1));
-                if (this.world.get(rx, ry) === ENTITY_TYPES.DIRT) {
-                    this.world.set(rx, ry, ENTITY_TYPES.TASK);
-                    this.taskQueue.push([rx, ry]);
-                    break;
+        for (let room = 0; room < Hive.NUM_ROOMS; room++) {
+            // Random room dimensions
+            const w = Hive.ROOM_MIN_W + Math.floor(Math.random() * (Hive.ROOM_MAX_W - Hive.ROOM_MIN_W + 1));
+            const h = Hive.ROOM_MIN_H + Math.floor(Math.random() * (Hive.ROOM_MAX_H - Hive.ROOM_MIN_H + 1));
+            // Random center point in the diggable area
+            const cx = Math.floor(Math.random() * this.world.width);
+            const cy = minY + Math.floor(Math.random() * (maxY - minY + 1));
+            // Rectangle bounds, clamped to the world
+            const left = Math.max(0, cx - Math.floor(w / 2));
+            const right = Math.min(this.world.width - 1, cx + Math.floor(w / 2));
+            const top = Math.max(minY, cy - Math.floor(h / 2));
+            const bottom = Math.min(maxY, cy + Math.floor(h / 2));
+            // Mark every dirt tile in the rectangle as a task
+            for (let y = top; y <= bottom; y++) {
+                for (let x = left; x <= right; x++) {
+                    if (this.world.get(x, y) === ENTITY_TYPES.DIRT) {
+                        this.world.set(x, y, ENTITY_TYPES.TASK);
+                        this.taskQueue.push([x, y]);
+                    }
                 }
             }
         }
@@ -60,3 +69,9 @@ export class Hive {
         }
     }
 }
+// ── Task map construction ─────────────────────────────────────────
+Hive.NUM_ROOMS = 3;
+Hive.ROOM_MIN_W = 2;
+Hive.ROOM_MAX_W = 4;
+Hive.ROOM_MIN_H = 2;
+Hive.ROOM_MAX_H = 4;

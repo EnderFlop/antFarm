@@ -6,6 +6,9 @@ import { findPath } from './pathfinding.js';
 type AntState = 'SEARCHING' | 'RETURNING';
 
 export class Ant {
+    /** If true, the ant recalculates its A* path every step instead of caching */
+    static recalcPathEveryStep = true;
+
     x: number;
     y: number;
     world: World;
@@ -99,8 +102,8 @@ export class Ant {
      * Otherwise, compute a new A* path toward (tx, ty).
      */
     private followOrBuildPath(tx: number, ty: number) {
-        // If no path exists, or we've exhausted it, compute a fresh one
-        if (!this.currentPath || this.currentPath.length === 0) {
+        // Recalculate every step if the toggle is on, otherwise only when needed
+        if (Ant.recalcPathEveryStep || !this.currentPath || this.currentPath.length === 0) {
             this.currentPath = findPath(this.world, this.x, this.y, tx, ty);
 
             // Still no path — stay put this tick
