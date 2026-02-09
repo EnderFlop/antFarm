@@ -7,5 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
         groundHeight: 5,
         numberOfAnts: 2,
         anthillCount: 1,
+        targetTPS: 2, // ticks per second (0 = unlimited)
     });
 });

@@ -17,17 +17,28 @@ export class AntFarm {
     lastTPSUpdate: number;
     currentTPS: number;
 
+    // Tick rate limiter
+    targetTPS: number;
+    msPerTick: number;
+    lastTickTime: number;
+
     constructor(options: { 
         width: number, 
         height: number, 
         groundHeight: number, 
         numberOfAnts: number, 
-        anthillCount: number, 
+        anthillCount: number,
+        targetTPS?: number,
     }) {
         this.tick = 0;
         this.isRunning = false;
         this.animationFrame = null;
         
+        // Tick rate limiter (0 = unlimited)
+        this.targetTPS = options.targetTPS ?? 0;
+        this.msPerTick = this.targetTPS > 0 ? 1000 / this.targetTPS : 0;
+        this.lastTickTime = 0;
+
         // Initialize TPS tracking
         this.ticksInLastSecond = 0;
         this.lastTPSUpdate = performance.now();
@@ -75,12 +86,24 @@ export class AntFarm {
     }
     
     start() {
-        const loop = () => {
-            if (this.isRunning) {
+        const loop = (timestamp: number) => {
+            if (!this.isRunning) return;
+
+            // If rate-limited, check if enough time has elapsed
+            if (this.msPerTick > 0) {
+                const elapsed = timestamp - this.lastTickTime;
+                if (elapsed >= this.msPerTick) {
+                    this.lastTickTime = timestamp;
+                    this.step();
+                }
+            } else {
+                // Unlimited — one tick per frame
                 this.step();
-                this.animationFrame = requestAnimationFrame(loop);
             }
+
+            this.animationFrame = requestAnimationFrame(loop);
         };
+        this.lastTickTime = performance.now();
         this.animationFrame = requestAnimationFrame(loop);
     }
     
