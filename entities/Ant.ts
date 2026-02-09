@@ -34,8 +34,8 @@ export class Ant {
         this.taskTarget = null;
         this.currentPath = null;
 
-        // Assign the first task
-        this.assignNewTask();
+        // Request the first task from the Hive
+        this.taskTarget = this.hive.requestTask();
 
         this.world.set(x, y, ENTITY_TYPES.ANT);
     }
@@ -54,8 +54,8 @@ export class Ant {
 
     private search() {
         if (!this.taskTarget) {
-            this.assignNewTask();
-            return;
+            this.taskTarget = this.hive.requestTask();
+            if (!this.taskTarget) return; // No tasks available — idle
         }
 
         const [tx, ty] = this.taskTarget;
@@ -66,9 +66,10 @@ export class Ant {
             return;
         }
 
-        // If the target is already air (another ant dug it), skip this task
+        // If the target is already air (another ant dug it), request a new task
         if (this.world.get(tx, ty) === ENTITY_TYPES.AIR) {
-            this.assignNewTask();
+            this.taskTarget = this.hive.requestTask();
+            this.currentPath = null;
             return;
         }
 
@@ -84,7 +85,7 @@ export class Ant {
         if (this.x === sx && this.y === sy) {
             this.state = 'SEARCHING';
             this.currentPath = null;
-            this.assignNewTask();
+            this.taskTarget = this.hive.requestTask();
             return;
         }
 
@@ -148,25 +149,4 @@ export class Ant {
         this.currentPath = null;
     }
 
-    /** Pick a random dirt coordinate below the surface as the next task */
-    private assignNewTask() {
-        const minY = this.world.groundHeight + 2; // below the crust layer
-        const maxY = this.world.height - 1;
-
-        // Try a few times to find a dirt tile
-        for (let attempt = 0; attempt < 50; attempt++) {
-            const rx = Math.floor(Math.random() * this.world.width);
-            const ry = minY + Math.floor(Math.random() * (maxY - minY + 1));
-
-            if (this.world.get(rx, ry) === ENTITY_TYPES.DIRT) {
-                this.taskTarget = [rx, ry];
-                this.currentPath = null;
-                return;
-            }
-        }
-
-        // Fallback: couldn't find dirt — stay idle with no task
-        this.taskTarget = null;
-        this.currentPath = null;
-    }
 }
