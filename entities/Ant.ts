@@ -66,8 +66,8 @@ export class Ant {
             return;
         }
 
-        // If the target is already air (another ant dug it), request a new task
-        if (this.world.get(tx, ty) === ENTITY_TYPES.AIR) {
+        // If the target is no longer a TASK tile (already dug or changed), request a new task
+        if (this.world.get(tx, ty) !== ENTITY_TYPES.TASK) {
             this.taskTarget = this.hive.requestTask();
             this.currentPath = null;
             return;
@@ -123,8 +123,8 @@ export class Ant {
         // Take the step
         this.currentPath.shift();
 
-        // If stepping into dirt, dig it out first
-        if (entity === ENTITY_TYPES.DIRT) {
+        // If stepping into dirt or a task tile, dig it out first
+        if (entity === ENTITY_TYPES.DIRT || entity === ENTITY_TYPES.TASK) {
             this.world.set(nx, ny, ENTITY_TYPES.AIR);
         }
 

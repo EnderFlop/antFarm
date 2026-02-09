@@ -53,7 +53,7 @@ export function findPath(world, startX, startY, targetX, targetY) {
             if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
                 moveCost = COST_AIR;
             }
-            else if (entity === ENTITY_TYPES.DIRT) {
+            else if (entity === ENTITY_TYPES.DIRT || entity === ENTITY_TYPES.TASK) {
                 moveCost = COST_DIRT;
             }
             else {

@@ -26,6 +26,7 @@ export class Hive {
                 const rx = Math.floor(Math.random() * this.world.width);
                 const ry = minY + Math.floor(Math.random() * (maxY - minY + 1));
                 if (this.world.get(rx, ry) === ENTITY_TYPES.DIRT) {
+                    this.world.set(rx, ry, ENTITY_TYPES.TASK);
                     this.taskQueue.push([rx, ry]);
                     break;
                 }

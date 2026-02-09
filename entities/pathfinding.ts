@@ -70,7 +70,7 @@ export function findPath(
             let moveCost: number;
             if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
                 moveCost = COST_AIR;
-            } else if (entity === ENTITY_TYPES.DIRT) {
+            } else if (entity === ENTITY_TYPES.DIRT || entity === ENTITY_TYPES.TASK) {
                 moveCost = COST_DIRT;
             } else {
                 // SKY, CRUST, or anything else — impassable
