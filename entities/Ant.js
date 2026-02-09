@@ -1,5 +1,5 @@
-import { ENTITY_TYPES, CARDINAL_DIRECTIONS } from './constants.js';
-import { findPathThroughAir } from './pathfinding.js';
+import { ENTITY_TYPES } from './constants.js';
+import { findPath } from './pathfinding.js';
 export class Ant {
     constructor(x, y, world, hive) {
         this.x = x;
@@ -7,144 +7,116 @@ export class Ant {
         this.world = world;
         this.hive = hive;
         this.state = 'SEARCHING';
-        // Deposit location is center of world on surface
-        this.depositLocation = [Math.floor(this.world.width / 2), this.world.groundHeight];
-        this.pathToDeposit = null;
+        // Return target is the center of the surface layer
+        this.surfaceTarget = [Math.floor(this.world.width / 2), this.world.groundHeight];
+        this.taskTarget = null;
+        this.currentPath = null;
+        // Assign the first task
+        this.assignNewTask();
         this.world.set(x, y, ENTITY_TYPES.ANT);
     }
+    // ── Public entry point (called once per tick) ──────────────────────
     move() {
         if (this.state === 'SEARCHING') {
             this.search();
         }
-        else if (this.state === 'RETURNING') {
-            this.returnToDeposit();
+        else {
+            this.returnToSurface();
         }
     }
-    // Search for best neighbor to move into
+    // ── SEARCHING: walk toward taskTarget, dig it, switch to RETURNING ─
     search() {
-        // Get all valid neighbors
-        const neighbors = this.getNeighbors();
-        if (neighbors.length === 0) {
-            return; // No valid moves, stay in place
-        }
-        // Score each neighbor
-        const scoredNeighbors = neighbors.map(neighbor => ({
-            position: neighbor.position,
-            entity: neighbor.entity,
-            score: this.scoreNeighbor(neighbor)
-        }));
-        // Pick the best neighbor
-        scoredNeighbors.sort((a, b) => b.score - a.score);
-        const best = scoredNeighbors[0];
-        // Move to best neighbor
-        this.moveTo(best.position[0], best.position[1]);
-        // If we moved into dirt, dig it
-        if (best.entity === ENTITY_TYPES.DIRT) {
-            this.dig();
-        }
-    }
-    // Get all valid neighbors
-    getNeighbors() {
-        const neighbors = [];
-        for (const [dx, dy] of CARDINAL_DIRECTIONS) {
-            const nx = this.x + dx;
-            const ny = this.y + dy;
-            // Check if valid position
-            if (!this.world.isValid(nx, ny)) {
-                continue;
-            }
-            const entity = this.world.get(nx, ny);
-            // Can't move into SKY or CRUST
-            if (entity === ENTITY_TYPES.SKY || entity === ENTITY_TYPES.CRUST) {
-                continue;
-            }
-            // Can move into AIR, DIRT, or other ANTs
-            if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.DIRT || entity === ENTITY_TYPES.ANT) {
-                neighbors.push({
-                    position: [nx, ny],
-                    entity: entity
-                });
-            }
-        }
-        return neighbors;
-    }
-    // Score a neighbor (to be implemented with criteria)
-    scoreNeighbor(neighbor) {
-        let score = Math.random();
-        const [nx, ny] = neighbor.position;
-        // Rule 1: Favor tiles below current position
-        if (ny > this.y) {
-            score += 1;
-        }
-        // Rule 2: If on surface, favor tiles that move toward nearest anthill
-        if (this.y === this.world.groundHeight) {
-            const nearestAnthill = this.findNearestAnthill();
-            if (nearestAnthill) {
-                const [anthillX, anthillY] = nearestAnthill;
-                const currentDistanceToAnthill = Math.abs(this.x - anthillX) + Math.abs(this.y - anthillY);
-                const neighborDistanceToAnthill = Math.abs(nx - anthillX) + Math.abs(ny - anthillY);
-                // If neighbor is closer to anthill, favor it
-                if (neighborDistanceToAnthill < currentDistanceToAnthill) {
-                    score += 2;
-                }
-            }
-        }
-        return score;
-    }
-    // Find the nearest anthill (AIR in crust layer)
-    findNearestAnthill() {
-        const crustY = this.world.groundHeight + 1;
-        // Search the crust layer for anthills (AIR tiles)
-        for (let i = 0; i < this.world.width; i++) {
-            const left = this.x - i;
-            const right = this.x + i;
-            const leftEntity = this.world.get(left, crustY);
-            const rightEntity = this.world.get(right, crustY);
-            if (leftEntity === ENTITY_TYPES.AIR) {
-                return [left, crustY];
-            }
-            if (rightEntity === ENTITY_TYPES.AIR) {
-                return [right, crustY];
-            }
-        }
-        return null;
-    }
-    // Dig the current dirt block and change to RETURNING state
-    dig() {
-        // The ant has already moved into the dirt position
-        // Change state to return with the dirt
-        this.state = 'RETURNING';
-    }
-    // Navigate back to deposit location using A*
-    returnToDeposit() {
-        const [targetX, targetY] = this.depositLocation;
-        // Check if we're at the deposit location
-        if (this.x === targetX && this.y === targetY) {
-            this.deposit();
+        if (!this.taskTarget) {
+            this.assignNewTask();
             return;
         }
-        // Build path if we don't have one
-        if (!this.pathToDeposit || this.pathToDeposit.length === 0) {
-            this.pathToDeposit = findPathThroughAir(this.world, this.x, this.y, targetX, targetY);
-            // If no path found, stay in place
-            if (!this.pathToDeposit || this.pathToDeposit.length === 0) {
+        const [tx, ty] = this.taskTarget;
+        // Arrived at the task target
+        if (this.x === tx && this.y === ty) {
+            this.dig();
+            return;
+        }
+        // If the target is already air (another ant dug it), skip this task
+        if (this.world.get(tx, ty) === ENTITY_TYPES.AIR) {
+            this.assignNewTask();
+            return;
+        }
+        this.followOrBuildPath(tx, ty);
+    }
+    // ── RETURNING: walk toward surface center, then get a new task ─────
+    returnToSurface() {
+        const [sx, sy] = this.surfaceTarget;
+        // Arrived at the surface target
+        if (this.x === sx && this.y === sy) {
+            this.state = 'SEARCHING';
+            this.currentPath = null;
+            this.assignNewTask();
+            return;
+        }
+        this.followOrBuildPath(sx, sy);
+    }
+    // ── Path following / building ──────────────────────────────────────
+    /**
+     * If we have a valid path, take one step along it.
+     * Otherwise, compute a new A* path toward (tx, ty).
+     */
+    followOrBuildPath(tx, ty) {
+        // If no path exists, or we've exhausted it, compute a fresh one
+        if (!this.currentPath || this.currentPath.length === 0) {
+            this.currentPath = findPath(this.world, this.x, this.y, tx, ty);
+            // Still no path — stay put this tick
+            if (!this.currentPath || this.currentPath.length === 0) {
                 return;
             }
         }
-        // Take one step along the path
-        const nextPos = this.pathToDeposit.shift();
-        this.moveTo(nextPos[0], nextPos[1]);
+        // Peek at the next step
+        const [nx, ny] = this.currentPath[0];
+        // Validate the next step is still walkable (could have changed since path was built)
+        const entity = this.world.get(nx, ny);
+        if (entity === ENTITY_TYPES.SKY || entity === ENTITY_TYPES.CRUST) {
+            // Path is stale — recompute next tick
+            this.currentPath = null;
+            return;
+        }
+        // Take the step
+        this.currentPath.shift();
+        // If stepping into dirt, dig it out first
+        if (entity === ENTITY_TYPES.DIRT) {
+            this.world.set(nx, ny, ENTITY_TYPES.AIR);
+        }
+        this.moveTo(nx, ny);
     }
-    // Deposit dirt and go back to SEARCHING
-    deposit() {
-        this.state = 'SEARCHING';
-        this.pathToDeposit = null;
-    }
-    // Move to a specific position
+    // ── Helpers ────────────────────────────────────────────────────────
+    /** Move the ant on the grid */
     moveTo(x, y) {
         this.world.set(this.x, this.y, ENTITY_TYPES.AIR);
         this.x = x;
         this.y = y;
         this.world.set(this.x, this.y, ENTITY_TYPES.ANT);
+    }
+    /** Called when the ant arrives at its dig target */
+    dig() {
+        // The tile under the ant is already AIR (moveTo set it), so nothing
+        // extra to remove — just switch state.
+        this.state = 'RETURNING';
+        this.currentPath = null;
+    }
+    /** Pick a random dirt coordinate below the surface as the next task */
+    assignNewTask() {
+        const minY = this.world.groundHeight + 2; // below the crust layer
+        const maxY = this.world.height - 1;
+        // Try a few times to find a dirt tile
+        for (let attempt = 0; attempt < 50; attempt++) {
+            const rx = Math.floor(Math.random() * this.world.width);
+            const ry = minY + Math.floor(Math.random() * (maxY - minY + 1));
+            if (this.world.get(rx, ry) === ENTITY_TYPES.DIRT) {
+                this.taskTarget = [rx, ry];
+                this.currentPath = null;
+                return;
+            }
+        }
+        // Fallback: couldn't find dirt — stay idle with no task
+        this.taskTarget = null;
+        this.currentPath = null;
     }
 }

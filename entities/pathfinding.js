@@ -1,26 +1,29 @@
 import { ENTITY_TYPES, CARDINAL_DIRECTIONS } from './constants.js';
+// Movement costs — air is cheap, dirt is expensive so ants prefer tunnels
+const COST_AIR = 1;
+const COST_DIRT = 10;
 /**
- * A* pathfinding through AIR to find the shortest path to a target position
- * @param world The world to pathfind through
- * @param startX Starting X coordinate
- * @param startY Starting Y coordinate
- * @param targetX Target X coordinate
- * @param targetY Target Y coordinate
- * @returns Array of positions representing the path, or null if no path found
+ * A* pathfinding that can traverse both AIR and DIRT.
+ * Paths through AIR are strongly preferred (cost 1 vs 10 for DIRT).
+ * Cannot pass through SKY or CRUST.
+ *
+ * @returns Array of positions representing the path (excluding start), or null if unreachable
  */
-export function findPathThroughAir(world, startX, startY, targetX, targetY) {
+export function findPath(world, startX, startY, targetX, targetY) {
     const startKey = `${startX},${startY}`;
     const targetKey = `${targetX},${targetY}`;
     if (startKey === targetKey)
         return [];
+    // Open set stored as a set of keys; we scan for lowest f each iteration
     const openSet = new Set([startKey]);
+    const closedSet = new Set();
     const cameFrom = new Map();
     const gScore = new Map();
     const fScore = new Map();
     gScore.set(startKey, 0);
     fScore.set(startKey, heuristic(startX, startY, targetX, targetY));
     while (openSet.size > 0) {
-        // Find node with lowest fScore
+        // Find node in openSet with the lowest fScore
         let current = '';
         let lowestF = Infinity;
         for (const node of openSet) {
@@ -34,33 +37,45 @@ export function findPathThroughAir(world, startX, startY, targetX, targetY) {
             return reconstructPath(cameFrom, current);
         }
         openSet.delete(current);
+        closedSet.add(current);
         const [cx, cy] = current.split(',').map(Number);
         for (const [dx, dy] of CARDINAL_DIRECTIONS) {
             const nx = cx + dx;
             const ny = cy + dy;
             if (!world.isValid(nx, ny))
                 continue;
-            const neighborEntity = world.get(nx, ny);
-            // Can only move through AIR or other ANTs
-            if (neighborEntity !== ENTITY_TYPES.AIR && neighborEntity !== ENTITY_TYPES.ANT)
-                continue;
             const neighborKey = `${nx},${ny}`;
-            const tentativeGScore = (gScore.get(current) ?? Infinity) + 1;
-            if (tentativeGScore < (gScore.get(neighborKey) ?? Infinity)) {
+            if (closedSet.has(neighborKey))
+                continue;
+            const entity = world.get(nx, ny);
+            // Determine movement cost based on tile type
+            let moveCost;
+            if (entity === ENTITY_TYPES.AIR || entity === ENTITY_TYPES.ANT) {
+                moveCost = COST_AIR;
+            }
+            else if (entity === ENTITY_TYPES.DIRT) {
+                moveCost = COST_DIRT;
+            }
+            else {
+                // SKY, CRUST, or anything else — impassable
+                continue;
+            }
+            const tentativeG = (gScore.get(current) ?? Infinity) + moveCost;
+            if (tentativeG < (gScore.get(neighborKey) ?? Infinity)) {
                 cameFrom.set(neighborKey, current);
-                gScore.set(neighborKey, tentativeGScore);
-                fScore.set(neighborKey, tentativeGScore + heuristic(nx, ny, targetX, targetY));
+                gScore.set(neighborKey, tentativeG);
+                fScore.set(neighborKey, tentativeG + heuristic(nx, ny, targetX, targetY));
                 openSet.add(neighborKey);
             }
         }
     }
     return null; // No path found
 }
-// Manhattan distance heuristic
+// Manhattan distance heuristic (admissible since min cost per step is 1)
 function heuristic(x1, y1, x2, y2) {
     return Math.abs(x1 - x2) + Math.abs(y1 - y2);
 }
-// Reconstruct path from A* came-from map
+// Reconstruct the path from A*'s cameFrom map (excludes start position)
 function reconstructPath(cameFrom, current) {
     const path = [];
     const [cx, cy] = current.split(',').map(Number);
@@ -70,7 +85,7 @@ function reconstructPath(cameFrom, current) {
         const [x, y] = current.split(',').map(Number);
         path.unshift([x, y]);
     }
-    // Remove first element (current position)
+    // Remove first element (the ant's current position)
     path.shift();
     return path;
 }
