@@ -7,7 +7,7 @@ type AntState = 'SEARCHING' | 'RETURNING';
 
 export class Ant {
     /** If true, the ant recalculates its A* path every step instead of caching */
-    static recalcPathEveryStep = true;
+    static recalcPathEveryStep = false;
 
     x: number;
     y: number;
@@ -23,6 +23,7 @@ export class Ant {
 
     /** Pre-computed path the ant is currently following */
     currentPath: Position[] | null;
+    currentPathIndex: number;
 
     constructor(x: number, y: number, world: World, hive: Hive) {
         this.x = x;
@@ -36,6 +37,7 @@ export class Ant {
 
         this.taskTarget = null;
         this.currentPath = null;
+        this.currentPathIndex = 0;
 
         // Request the first task from the Hive
         this.taskTarget = this.hive.requestTask();
@@ -73,6 +75,7 @@ export class Ant {
         if (this.world.get(tx, ty) !== ENTITY_TYPES.TASK) {
             this.taskTarget = this.hive.requestTask();
             this.currentPath = null;
+            this.currentPathIndex = 0;
             return;
         }
 
@@ -88,6 +91,7 @@ export class Ant {
         if (this.x === sx && this.y === sy) {
             this.state = 'SEARCHING';
             this.currentPath = null;
+            this.currentPathIndex = 0;
             this.taskTarget = this.hive.requestTask();
             return;
         }
@@ -103,8 +107,9 @@ export class Ant {
      */
     private followOrBuildPath(tx: number, ty: number) {
         // Recalculate every step if the toggle is on, otherwise only when needed
-        if (Ant.recalcPathEveryStep || !this.currentPath || this.currentPath.length === 0) {
+        if (Ant.recalcPathEveryStep || !this.currentPath || this.currentPathIndex >= this.currentPath.length) {
             this.currentPath = findPath(this.world, this.x, this.y, tx, ty);
+            this.currentPathIndex = 0;
 
             // Still no path — stay put this tick
             if (!this.currentPath || this.currentPath.length === 0) {
@@ -113,18 +118,19 @@ export class Ant {
         }
 
         // Peek at the next step
-        const [nx, ny] = this.currentPath[0];
+        const [nx, ny] = this.currentPath[this.currentPathIndex];
 
         // Validate the next step is still walkable (could have changed since path was built)
         const entity = this.world.get(nx, ny);
         if (entity === ENTITY_TYPES.SKY || entity === ENTITY_TYPES.CRUST) {
             // Path is stale — recompute next tick
             this.currentPath = null;
+            this.currentPathIndex = 0;
             return;
         }
 
         // Take the step
-        this.currentPath.shift();
+        this.currentPathIndex++;
 
         // If stepping into dirt or a task tile, dig it out first
         if (entity === ENTITY_TYPES.DIRT || entity === ENTITY_TYPES.TASK) {
@@ -150,6 +156,7 @@ export class Ant {
         // extra to remove — just switch state.
         this.state = 'RETURNING';
         this.currentPath = null;
+        this.currentPathIndex = 0;
     }
 
 }

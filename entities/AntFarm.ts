@@ -1,6 +1,16 @@
 import { World } from './World.js';
-import { ASCIIRenderer } from './Renderer.js';
+import { CanvasRenderer } from './Renderer.js';
 import { Hive } from './Hive.js';
+
+export type AntFarmOptions = {
+    width: number;
+    height: number;
+    groundHeight: number;
+    numberOfAnts: number;
+    anthillCount: number;
+    targetTPS?: number;
+    tileDisplaySize: number;
+};
 
 // Main application
 export class AntFarm {
@@ -8,8 +18,8 @@ export class AntFarm {
     isRunning: boolean;
     animationFrame: number | null;
     world: World;
-    display: HTMLElement;
-    asciiRenderer: ASCIIRenderer;
+    display: HTMLCanvasElement;
+    renderer: CanvasRenderer;
     hive: Hive;
     
     // TPS tracking
@@ -22,14 +32,7 @@ export class AntFarm {
     msPerTick: number;
     lastTickTime: number;
 
-    constructor(options: { 
-        width: number, 
-        height: number, 
-        groundHeight: number, 
-        numberOfAnts: number, 
-        anthillCount: number,
-        targetTPS?: number,
-    }) {
+    constructor(options: AntFarmOptions) {
         this.tick = 0;
         this.isRunning = false;
         this.animationFrame = null;
@@ -45,34 +48,15 @@ export class AntFarm {
         this.currentTPS = 0;
 
         this.world = new World(options.width, options.height, options.groundHeight, options.anthillCount);
-        this.display = document.getElementById('worldDisplay')!;
-        this.asciiRenderer = new ASCIIRenderer(this.display, this.world);
+        this.display = document.getElementById('worldDisplay') as HTMLCanvasElement;
+        this.renderer = new CanvasRenderer(this.display, this.world, options.tileDisplaySize);
         this.hive = new Hive(this.world, options.numberOfAnts);
         
-        this.setupEventListeners();
         document.getElementById('gridSize')!.textContent = `${this.world.width}x${this.world.height}`;
 
         this.updateUI();
-        this.asciiRenderer.updateDisplay();
+        this.renderer.updateDisplay();
     }
-    
-    setupEventListeners() {
-        // Play/Pause button
-        document.getElementById('playPause')!.addEventListener('click', () => {
-            this.toggle();
-        });
-        
-        // Step button
-        document.getElementById('step')!.addEventListener('click', () => {
-            this.step();
-        });
-
-        // Reset button
-        document.getElementById('reset')!.addEventListener('click', () => {
-            window.location.reload();
-        });
-    }
-        
     
     toggle() {
         this.isRunning = !this.isRunning;
@@ -113,9 +97,14 @@ export class AntFarm {
             this.animationFrame = null;
         }
     }
+
+    destroy() {
+        this.isRunning = false;
+        this.stop();
+    }
     
     updateUI() {
-        this.asciiRenderer.updateDisplay();
+        this.renderer.updateDisplay();
         document.getElementById('tick')!.textContent = this.tick.toString();
         document.getElementById('tps')!.textContent = this.currentTPS.toFixed(1);
     }

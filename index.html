@@ -11,19 +11,52 @@
 </head>
 <body>
     <div class="window">
-        <div class="window">
-            <pre id="worldDisplay"></pre>
+        <div class="world-viewport">
+            <canvas id="worldDisplay" aria-label="Ant farm world"></canvas>
         </div>
         <div class="controls">
-            <button id="playPause">Play</button>
-            <button id="step">Step</button>
-            <button id="reset">Reset</button>
+            <button id="playPause" type="button">Play</button>
+            <button id="step" type="button">Step</button>
+            <button id="reset" type="button">Reset</button>
             <div class="info">
                 <span>Grid: <span id="gridSize">0x0</span></span>
                 <span>Tick: <span id="tick">0</span></span>
                 <span>TPS: <span id="tps">0</span></span>
             </div>
         </div>
+    </div>
+    <div class="window settings-window">
+        <form id="settingsForm" class="settings">
+            <label>
+                Width
+                <input id="widthInput" type="number" min="1" step="1">
+            </label>
+            <label>
+                Height
+                <input id="heightInput" type="number" min="3" step="1">
+            </label>
+            <label>
+                Ground
+                <input id="groundHeightInput" type="number" min="0" step="1">
+            </label>
+            <label>
+                Ants
+                <input id="numberOfAntsInput" type="number" min="0" step="1">
+            </label>
+            <label>
+                Anthills
+                <input id="anthillCountInput" type="number" min="0" step="1">
+            </label>
+            <label>
+                TPS
+                <input id="targetTPSInput" type="number" min="0" step="1">
+            </label>
+            <label>
+                Tile px
+                <input id="tileDisplaySizeInput" type="number" min="1" step="1">
+            </label>
+            <button type="submit">Apply</button>
+        </form>
     </div>
     <script type="module" src="dist/main.js"></script>
 </body>
