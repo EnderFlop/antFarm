@@ -1,10 +1,13 @@
 {
   "name": "antfarm",
   "version": "1.0.0",
-  "main": "main.js",
+  "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
+    "watch": "tsc --watch",
+    "serve": "python -m http.server 8000 --bind 127.0.0.1",
+    "dev": "npm run build && npm run serve",
+    "start": "npm run dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
